@@ -21,9 +21,12 @@ class Temperature {
   double? get celsius => _kelvin != null ? _kelvin! - 273.15 : null;
 
   /// Convert temperature to Fahrenheit
-  double? get fahrenheit => _kelvin != null ? _kelvin! * (9 / 5) - 459.67 : null;
+  double? get fahrenheit =>
+      _kelvin != null ? _kelvin! * (9 / 5) - 459.67 : null;
 
-  String toString() => celsius != null ? '${celsius!.toStringAsFixed(1)} Celsius' : "No temperature";
+  String toString() => celsius != null
+      ? '${celsius!.toStringAsFixed(1)} Celsius'
+      : "No temperature";
 }
 
 /// A class for storing a weather-query response from OpenWeatherMap.
@@ -43,6 +46,7 @@ class Weather {
       _windGust,
       _humidity,
       _cloudiness,
+      _pop,
       _rainLastHour,
       _rainLast3Hours,
       _snowLastHour,
@@ -86,6 +90,7 @@ class Weather {
     _windGust = _unpackDouble(wind, 'gust');
 
     _cloudiness = _unpackDouble(clouds, 'all');
+    _pop = _unpackDouble(jsonData, 'pop');
 
     _rainLastHour = _unpackDouble(rain, '1h');
     _rainLast3Hours = _unpackDouble(rain, '3h');
@@ -127,6 +132,9 @@ class Weather {
 
   /// The level of cloudiness in Okta (0-9 scale)
   double? get cloudiness => _cloudiness;
+
+  /// Decimal value: probability of precipitation 0.00
+  double? get pop => _pop;
 
   /// Wind direction in degrees
   double? get windDegree => _windDegree;
