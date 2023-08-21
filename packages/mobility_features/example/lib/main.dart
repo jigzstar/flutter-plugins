@@ -22,9 +22,7 @@ Widget entry(String key, String value, Icon icon) {
       ));
 }
 
-String formatDate(DateTime date) {
-  return '${date.year}/${date.month}/${date.day}';
-}
+String formatDate(DateTime date) => '${date.year}/${date.month}/${date.day}';
 
 String interval(DateTime a, DateTime b) {
   String pad(int x) => '${x.toString().padLeft(2, '0')}';
@@ -53,11 +51,11 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Mobility Features Demo',
+      title: 'Mobility Features Example',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: MyHomePage(title: 'Mobility Features Demo'),
+      home: MyHomePage(title: 'Mobility Features Example'),
     );
   }
 }
@@ -66,7 +64,7 @@ String dtoToString(LocationDto dto) =>
     '${dto.latitude}, ${dto.longitude} @ ${DateTime.fromMillisecondsSinceEpoch(dto.time ~/ 1)}';
 
 class MyHomePage extends StatefulWidget {
-  MyHomePage({Key key, this.title}) : super(key: key);
+  MyHomePage({Key? key, required this.title}) : super(key: key);
   final String title;
 
   @override
@@ -79,12 +77,12 @@ class _MyHomePageState extends State<MyHomePage> {
   int _currentIndex = 0;
 
   // Location Streaming
-  Stream<LocationDto> locationStream;
-  StreamSubscription<LocationDto> locationSubscription;
+  late Stream<LocationDto> locationStream;
+  late StreamSubscription<LocationDto> locationSubscription;
 
   // Mobility Features stream
-  StreamSubscription<MobilityContext> mobilitySubscription;
-  MobilityContext _mobilityContext;
+  late StreamSubscription<MobilityContext> mobilitySubscription;
+  late MobilityContext _mobilityContext;
 
   @override
   void initState() {
@@ -103,12 +101,39 @@ class _MyHomePageState extends State<MyHomePage> {
     streamInit();
   }
 
-  @override
-  void dispose() {
-    mobilitySubscription?.cancel();
-    super.dispose();
+  /// Set up streams:
+  /// * Location streaming to MobilityContext
+  /// * Subscribe to MobilityContext updates
+  void streamInit() async {
+    locationStream = LocationManager().locationStream;
+
+    // subscribe to location stream - in case this is needed in the app
+    //locationSubscription.cancel();
+    locationSubscription = locationStream.listen(onLocationUpdate);
+
+    // start the location service (specific to carp_background_location)
+    await LocationManager().start();
+
+    // map from [LocationDto] to [LocationSample]
+    Stream<LocationSample> locationSampleStream = locationStream.map(
+        (location) => LocationSample(
+            GeoLocation(location.latitude, location.longitude),
+            DateTime.now()));
+
+    // provide the [MobilityFeatures] instance with the LocationSample stream
+    MobilityFeatures().startListening(locationSampleStream);
+
+    // start listening to incoming MobilityContext objects
+    mobilitySubscription =
+        MobilityFeatures().contextStream.listen(onMobilityContext);
   }
 
+  /// Called whenever location changes.
+  void onLocationUpdate(LocationDto dto) {
+    print(dtoToString(dto));
+  }
+
+  /// Called whenever mobility context changes.
   void onMobilityContext(MobilityContext context) {
     print('Context received: ${context.toJson()}');
     setState(() {
@@ -117,30 +142,11 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
-  /// Set up streams:
-  /// * Subscribe to stream in case it is already running (Android only)
-  /// * Subscribe to MobilityContext updates
-  void streamInit() async {
-    locationStream = LocationManager().locationStream;
-    locationSubscription = locationStream.listen(onData);
-
-    // Subscribe if it hasn't been done already
-    if (locationSubscription != null) {
-      locationSubscription.cancel();
-    }
-    locationSubscription = locationStream.listen(onData);
-    await LocationManager().start();
-
-    Stream<LocationSample> locationSampleStream = locationStream.map((e) =>
-        LocationSample(GeoLocation(e.latitude, e.longitude), DateTime.now()));
-
-    MobilityFeatures().startListening(locationSampleStream);
-    mobilitySubscription =
-        MobilityFeatures().contextStream.listen(onMobilityContext);
-  }
-
-  void onData(LocationDto dto) {
-    print(dtoToString(dto));
+  @override
+  void dispose() {
+    mobilitySubscription.cancel();
+    locationSubscription.cancel();
+    super.dispose();
   }
 
   Widget get featuresOverview {
@@ -152,21 +158,21 @@ class _MyHomePageState extends State<MyHomePage> {
             "${_mobilityContext.numberOfSignificantPlaces}", placeIcon),
         entry(
             "Home Stay",
-            _mobilityContext.homeStay < 0
+            _mobilityContext.homeStay! < 0
                 ? "?"
-                : "${(_mobilityContext.homeStay * 100).toStringAsFixed(1)}%",
+                : "${(_mobilityContext.homeStay! * 100).toStringAsFixed(1)}%",
             homeStayIcon),
         entry(
             "Distance Travelled",
-            "${(_mobilityContext.distanceTravelled / 1000).toStringAsFixed(2)} km",
+            "${(_mobilityContext.distanceTravelled! / 1000).toStringAsFixed(2)} km",
             distanceTravelledIcon),
         entry(
             "Normalized Entropy",
-            "${_mobilityContext.normalizedEntropy.toStringAsFixed(2)}",
+            "${_mobilityContext.normalizedEntropy?.toStringAsFixed(2)}",
             entropyIcon),
         entry(
             "Location Variance",
-            "${(111.133 * _mobilityContext.locationVariance).toStringAsFixed(5)} km",
+            "${(111.133 * _mobilityContext.locationVariance!).toStringAsFixed(5)} km",
             varianceIcon),
       ],
     );
@@ -236,7 +242,7 @@ class _MyHomePageState extends State<MyHomePage> {
     List<Move> moves = [];
     List<Place> places = [];
 
-    if (_mobilityContext != null) {
+    if (_state == AppState.FEATURES_READY) {
       for (var x in _mobilityContext.stops) print(x);
       for (var x in _mobilityContext.moves) {
         print(x);
